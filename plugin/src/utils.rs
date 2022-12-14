@@ -153,16 +153,9 @@ impl<T: RuntimeType + 'static> VectorIterator<T> {
 
 pub trait IBufferExt {
     /// Get a slice to an `IBuffer`'s underlying buffer.
-    ///
-    /// NOTE: This returns a slice with the length set to the IBuffer's Length and not Capacity.
     fn get_buf(&self) -> Result<&[u8]>;
 
     /// Get a mutable slice to an `IBuffer`'s underlying buffer.
-    ///
-    /// NOTE: This returns a slice with the length set to the IBuffer's Capacity and not Length.
-    ///
-    /// TODO: Is this safe?
-    ///       For `VpnPacketBuffer` at least, the buffer should be initialized & zeroed.
     fn get_buf_mut(&mut self) -> Result<&mut [u8]>;
 }
 
@@ -180,12 +173,12 @@ impl IBufferExt for VpnPacketBuffer {
 
     fn get_buf_mut(&mut self) -> Result<&mut [u8]> {
         let buffer = self.Buffer()?;
-        let cap = buffer.Capacity()?;
+        let len = buffer.Length()?;
         let rawBuffer = buffer.cast::<IBufferByteAccess>()?;
         Ok(unsafe {
             // SAFETY: Any type that implements `IBuffer` must also implement `IBufferByteAccess`
             // to return the buffer as an array of bytes.
-            std::slice::from_raw_parts_mut(rawBuffer.Buffer()?, cap as usize)
+            std::slice::from_raw_parts_mut(rawBuffer.Buffer()?, len as usize)
         })
     }
 }

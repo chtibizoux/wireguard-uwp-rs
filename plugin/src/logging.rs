@@ -23,6 +23,10 @@ pub trait WireGuardUWPEvents {
     /// Indicates how many outgoing packets are ready to be encapsulated.
     #[event(level = "verbose")]
     fn encapsulate_begin(packets: u32);
+    /// Frame encap failure event.
+    /// Indicates a encapsulation failure and why it occurred.
+    #[event(level = "verbose")]
+    fn encapsulate_fail(code: u32, msg: &str);
     /// Packet encap end event.
     /// Indicates how many frames we sent to the remote endpoint.
     #[event(level = "verbose")]
@@ -32,6 +36,10 @@ pub trait WireGuardUWPEvents {
     /// Indicates the size of the frame received from the remote endpoint.
     #[event(level = "verbose")]
     fn decapsulate_begin(frame_sz: u32);
+    /// Frame decap failure event.
+    /// Indicates a decapsulation failure and why it occurred.
+    #[event(level = "verbose")]
+    fn decapsulate_fail(code: u32, msg: &str);
     /// Frame decap end event.
     /// Indicates how many packets were decapsulated and how many frames sent to the remote.
     #[event(level = "verbose")]

@@ -2,10 +2,58 @@
 
 use std::net::IpAddr;
 
-use boringtun::crypto::x25519::{X25519PublicKey, X25519SecretKey};
 use ipnetwork::IpNetwork;
-use serde::Deserialize;
-use serde_with::{serde_as, DisplayFromStr};
+use serde::{Deserialize, Serializer};
+use serde_with::serde_as;
+use x25519_dalek::{PublicKey, StaticSecret};
+
+fn as_base64_privkey<S>(key: &StaticSecret, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    serializer.serialize_str(&base64::encode(key.to_bytes()))
+}
+
+fn as_base64_pubkey<S>(key: &PublicKey, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    serializer.serialize_str(&base64::encode(key.as_bytes()))
+}
+
+fn from_base64<'de, D, S>(deserializer: D) -> Result<S, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    S: core::convert::From<[u8; 32]>,
+{
+    use serde::de::Error;
+    String::deserialize(deserializer)
+        .and_then(|string| base64::decode(&string).map_err(|err| Error::custom(err.to_string())))
+        .map(|bytes| TryInto::<[u8; 32]>::try_into(bytes).map(S::from).ok())
+        .and_then(|opt| opt.ok_or_else(|| Error::custom("failed to deserialize public key")))
+}
+
+/// Try to parse the base64 encoded pre-shared key from the config
+/// into the raw bytes it represents.
+fn from_base64_opt<'de, D>(deserializer: D) -> Result<Option<[u8; 32]>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::Error;
+    match Option::<String>::deserialize(deserializer) {
+        Ok(s) => match s {
+            Some(s) => match base64::decode(&s) {
+                Ok(b) => match b.try_into() {
+                    Ok(b) => Ok(Some(b)),
+                    Err(_) => Err(Error::custom("invalid pre-shared key")),
+                },
+                Err(e) => Err(Error::custom(e.to_string())),
+            },
+            None => Ok(None),
+        },
+        Err(e) => Err(e),
+    }
+}
 
 /// A fully-parsed config
 #[derive(Deserialize)]
@@ -31,8 +79,8 @@ impl WireGuardConfig {
 #[serde(rename_all = "PascalCase")]
 pub struct InterfaceConfig {
     /// Our local private key
-    #[serde_as(as = "DisplayFromStr")]
-    pub private_key: X25519SecretKey,
+    #[serde(serialize_with = "as_base64_privkey", deserialize_with = "from_base64")]
+    pub private_key: StaticSecret,
 
     /// Addresses to assign to local VPN interface
     pub address: Vec<IpNetwork>,
@@ -54,8 +102,8 @@ pub struct InterfaceConfig {
 #[serde(rename_all = "PascalCase")]
 pub struct PeerConfig {
     /// The remote endpoint's public key
-    #[serde_as(as = "DisplayFromStr")]
-    pub public_key: X25519PublicKey,
+    #[serde(serialize_with = "as_base64_pubkey", deserialize_with = "from_base64")]
+    pub public_key: PublicKey,
 
     /// The port the remote endpoint is listening
     pub port: u16,
@@ -74,28 +122,6 @@ pub struct PeerConfig {
 
     /// An optional pre-shared key to enable an additional layer of security
     #[serde(default)]
-    #[serde(deserialize_with = "from_base64")]
+    #[serde(deserialize_with = "from_base64_opt")]
     pub preshared_key: Option<[u8; 32]>,
-}
-
-/// Try to parse the base64 encoded pre-shared key from the config
-/// into the raw bytes it represents.
-fn from_base64<'de, D>(deserializer: D) -> Result<Option<[u8; 32]>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    use serde::de::Error;
-    match Option::<String>::deserialize(deserializer) {
-        Ok(s) => match s {
-            Some(s) => match base64::decode(&s) {
-                Ok(b) => match b.try_into() {
-                    Ok(b) => Ok(Some(b)),
-                    Err(_) => Err(Error::custom("invalid pre-shared key")),
-                },
-                Err(e) => Err(Error::custom(e.to_string())),
-            },
-            None => Ok(None),
-        },
-        Err(e) => Err(e),
-    }
 }

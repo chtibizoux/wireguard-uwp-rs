@@ -1,8 +1,9 @@
 //! Our implementation of `IVpnPlugIn` which is the bulk of the UWP VPN plugin.
 
-use std::sync::{Arc, RwLock};
+use std::sync::Mutex;
 use std::time::Duration;
 
+use boringtun::noise::errors::WireGuardError;
 use boringtun::noise::{Tunn, TunnResult};
 use ipnetwork::IpNetwork;
 use windows::{
@@ -31,14 +32,14 @@ impl Inner {
 /// The VPN plugin object which provides the hooks that the UWP VPN platform will call into.
 #[implement(Windows::Networking::Vpn::IVpnPlugIn)]
 pub struct VpnPlugin {
-    inner: RwLock<Inner>,
+    inner: Mutex<Inner>,
     etw_logger: WireGuardUWPEvents,
 }
 
 impl VpnPlugin {
     pub fn new() -> Self {
         Self {
-            inner: RwLock::new(Inner::new()),
+            inner: Mutex::new(Inner::new()),
             etw_logger: WireGuardUWPEvents::new(),
         }
     }
@@ -58,7 +59,7 @@ impl VpnPlugin {
     /// Internal `Connect` implementation.
     fn connect_inner(&self, channel: &Option<VpnChannel>) -> Result<()> {
         let channel = channel.as_ref().ok_or(Error::from(E_UNEXPECTED))?;
-        let mut inner = self.inner.write().unwrap();
+        let mut inner = self.inner.lock().unwrap();
 
         let config = channel.Configuration()?;
 
@@ -74,8 +75,8 @@ impl VpnPlugin {
             }
         };
 
-        let static_private = Arc::new(wg_config.interface.private_key);
-        let peer_static_public = Arc::new(wg_config.peer.public_key);
+        let static_private = wg_config.interface.private_key;
+        let peer_static_public = wg_config.peer.public_key;
         let persistent_keepalive = wg_config.peer.persistent_keepalive;
         let preshared_key = wg_config.peer.preshared_key;
 
@@ -195,8 +196,8 @@ impl VpnPlugin {
             peer_static_public,
             preshared_key,
             persistent_keepalive,
-            0,    // Peer index. we only have one peer
-            None, // TODO: No rate limiter
+            rand::random(), // Our sender index. Needs to be a pseudorandom number.
+            None,           // TODO: No rate limiter
         )
         // TODO: is E_UNEXPECTED the right error here?
         .map_err(|e| Error::new(E_UNEXPECTED, e.into()))?;
@@ -259,7 +260,7 @@ impl VpnPlugin {
     fn disconnect_inner(&self, channel: &Option<VpnChannel>) -> Result<()> {
         let channel = channel.as_ref().ok_or(Error::from(E_UNEXPECTED))?;
 
-        let mut inner = self.inner.write().unwrap();
+        let mut inner = self.inner.lock().unwrap();
         inner.tunn = None;
 
         channel.Stop()?;
@@ -278,13 +279,30 @@ impl VpnPlugin {
         packets: &Option<VpnPacketBufferList>,
         encapsulatedPackets: &Option<VpnPacketBufferList>,
     ) -> Result<()> {
+        // Call out to separate method so that we can capture any errors
+        match self.encapsulate_inner(channel, packets, encapsulatedPackets) {
+            Ok(_) => Ok(()),
+            Err(err) => {
+                self.etw_logger
+                    .encapsulate_fail(None, err.code().0, &err.to_string());
+                Err(err)
+            }
+        }
+    }
+
+    fn encapsulate_inner(
+        &self,
+        channel: &Option<VpnChannel>,
+        packets: &Option<VpnPacketBufferList>,
+        encapsulatedPackets: &Option<VpnPacketBufferList>,
+    ) -> Result<()> {
         let channel = channel.as_ref().ok_or(Error::from(E_UNEXPECTED))?;
         let packets = packets.as_ref().ok_or(Error::from(E_UNEXPECTED))?;
         let encapsulatedPackets = encapsulatedPackets
             .as_ref()
             .ok_or(Error::from(E_UNEXPECTED))?;
 
-        let inner = self.inner.read().unwrap();
+        let inner = self.inner.lock().unwrap();
         let tunn = if let Some(tunn) = &inner.tunn {
             &**tunn
         } else {
@@ -320,11 +338,12 @@ impl VpnPlugin {
                 TunnResult::WriteToNetwork(packet) => {
                     // Request a new buffer
                     let mut handshake_buffer = channel.GetVpnSendPacketBuffer()?;
+                    handshake_buffer.Buffer()?.SetLength(
+                        u32::try_from(packet.len()).map_err(|_| Error::from(E_BOUNDS))?,
+                    )?;
 
                     // Copy data over and update length on WinRT buffer
-                    handshake_buffer.get_buf_mut()?[..packet.len()].copy_from_slice(packet);
-                    let new_len = u32::try_from(packet.len()).map_err(|_| Error::from(E_BOUNDS))?;
-                    handshake_buffer.Buffer()?.SetLength(new_len)?;
+                    handshake_buffer.get_buf_mut()?.copy_from_slice(packet);
 
                     // Now queue it up to be sent
                     encapsulatedPackets.Append(handshake_buffer)?;
@@ -349,6 +368,11 @@ impl VpnPlugin {
 
             // Grab a destination buffer for the encapsulated packet
             let mut encapPacket = channel.GetVpnSendPacketBuffer()?;
+
+            // Maximize the buffer's length to its capacity.
+            encapPacket
+                .Buffer()?
+                .SetLength(encapPacket.Buffer()?.Capacity()?)?;
             let dst = encapPacket.get_buf_mut()?;
 
             // Try to encapsulate packet
@@ -429,6 +453,24 @@ impl VpnPlugin {
         decapsulatedPackets: &Option<VpnPacketBufferList>,
         controlPackets: &Option<VpnPacketBufferList>,
     ) -> Result<()> {
+        // Call out to separate method so that we can capture any errors
+        match self.decapsulate_inner(channel, buffer, decapsulatedPackets, controlPackets) {
+            Ok(_) => Ok(()),
+            Err(err) => {
+                self.etw_logger
+                    .decapsulate_fail(None, err.code().0, &err.to_string());
+                Err(err)
+            }
+        }
+    }
+
+    fn decapsulate_inner(
+        &self,
+        channel: &Option<VpnChannel>,
+        buffer: &Option<VpnPacketBuffer>,
+        decapsulatedPackets: &Option<VpnPacketBufferList>,
+        controlPackets: &Option<VpnPacketBufferList>,
+    ) -> Result<()> {
         let channel = channel.as_ref().ok_or(Error::from(E_UNEXPECTED))?;
         let buffer = buffer.as_ref().ok_or(Error::from(E_UNEXPECTED))?;
         let decapsulatedPackets = decapsulatedPackets
@@ -436,7 +478,7 @@ impl VpnPlugin {
             .ok_or(Error::from(E_UNEXPECTED))?;
         let controlPackets = controlPackets.as_ref().ok_or(Error::from(E_UNEXPECTED))?;
 
-        let inner = self.inner.read().unwrap();
+        let inner = self.inner.lock().unwrap();
         let tunn = if let Some(tunn) = &inner.tunn {
             &**tunn
         } else {
@@ -447,13 +489,12 @@ impl VpnPlugin {
         self.etw_logger
             .decapsulate_begin(None, buffer.Buffer()?.Length()?);
 
-        // Allocate a buffer for the decapsulate packet
-        let mut decapPacket = channel.GetVpnReceivePacketBuffer()?;
-        let dst = decapPacket.get_buf_mut()?;
+        // Allocate a temporary buffer on the stack for the decapsulated packet.
+        let mut dst = [0u8; 1500];
 
         // Get a slice to the datagram we just received from the remote endpoint and try to decap
         let datagram = buffer.get_buf()?;
-        let res = tunn.decapsulate(None, datagram, dst);
+        let res = tunn.decapsulate(None, datagram, &mut dst);
 
         match res {
             // Nothing to do with this decap result
@@ -461,59 +502,53 @@ impl VpnPlugin {
                 // TODO: Return unused `decapPacket` buffer
             }
 
+            // DD-WRT sometimes sends us packets that are destined for someone else?
+            // Either way, just ignore the packet.
+            TunnResult::Err(WireGuardError::WrongIndex) => {}
+
             // Encountered an error while trying to decapsulate
             TunnResult::Err(err) => {
                 // TODO: Return unused `decapPacket` buffer
                 return Err(Error::new(
                     E_UNEXPECTED,
-                    format!("encap error: {:?}", err).into(),
+                    format!("decap error: {:?}", err).into(),
                 ));
             }
 
-            // We need to send response back to remote endpoint
+            // We need to send at least one response back to remote endpoint
             TunnResult::WriteToNetwork(packet) => {
-                // Make sure to update length on WinRT buffer
-                let new_len = u32::try_from(packet.len()).map_err(|_| Error::from(E_BOUNDS))?;
-                drop(packet);
-
-                // TODO: technically, we really should've used `GetVpnSendPacketBuffer` for this
-                //       buffer but boringtun doesn't really have a way to know in advance if it'll
-                //       be giving back control packets instead of data packets.
-                //       We could just use temp buffers and copy as appropriate?
-                let controlPacket = decapPacket;
-                controlPacket.Buffer()?.SetLength(new_len)?;
-
-                // Tack onto `controlPackets` so that they get sent to remote endpoint
-                controlPackets.Append(controlPacket)?;
-
-                // We need to probe for any more packets queued to send
-                loop {
-                    // Allocate a buffer for control packet
+                let mut res = TunnResult::WriteToNetwork(packet);
+                while let TunnResult::WriteToNetwork(packet) = res {
+                    // Allocate a buffer for the decapsulate packet
                     let mut controlPacket = channel.GetVpnSendPacketBuffer()?;
-                    let dst = controlPacket.get_buf_mut()?;
 
-                    let res = tunn.decapsulate(None, &[], dst);
-                    if let TunnResult::WriteToNetwork(packet) = res {
-                        // Make sure to update length on WinRT buffer
-                        let new_len =
-                            u32::try_from(packet.len()).map_err(|_| Error::from(E_BOUNDS))?;
-                        drop(packet);
-                        controlPacket.Buffer()?.SetLength(new_len)?;
-                        controlPackets.Append(controlPacket)?;
-                    } else {
-                        // TODO: Return unused `controlPacket` buffer
-                        // Nothing more to do
-                        break;
-                    }
+                    // Set the buffer's length.
+                    controlPacket.Buffer()?.SetLength(
+                        u32::try_from(packet.len()).map_err(|_| Error::from(E_BOUNDS))?,
+                    )?;
+
+                    // Now copy the output buffer.
+                    controlPacket.get_buf_mut()?.copy_from_slice(packet);
+
+                    // Tack onto `controlPackets` so that they get sent to remote endpoint
+                    controlPackets.Append(controlPacket)?;
+
+                    // Probe for more packets to send.
+                    res = tunn.decapsulate(None, &[], &mut dst);
                 }
             }
 
             // Successfully decapsulated data packet
             TunnResult::WriteToTunnelV4(packet, _) | TunnResult::WriteToTunnelV6(packet, _) => {
+                // Allocate a buffer for the decapsulate packet
+                let mut decapPacket = channel.GetVpnReceivePacketBuffer()?;
+
                 // Make sure to update length on WinRT buffer
                 let new_len = u32::try_from(packet.len()).map_err(|_| Error::from(E_BOUNDS))?;
-                drop(packet);
                 decapPacket.Buffer()?.SetLength(new_len)?;
+
+                // Now copy the output buffer.
+                decapPacket.get_buf_mut()?.copy_from_slice(packet);
 
                 // Tack onto `decapsulatedPackets` to inject into VPN interface
                 decapsulatedPackets.Append(decapPacket)?;
@@ -536,7 +571,7 @@ impl VpnPlugin {
     ) -> Result<()> {
         let channel = channel.as_ref().ok_or(Error::from(E_UNEXPECTED))?;
 
-        let inner = self.inner.read().unwrap();
+        let inner = self.inner.lock().unwrap();
         let tunn = if let Some(tunn) = &inner.tunn {
             &**tunn
         } else {
@@ -546,12 +581,11 @@ impl VpnPlugin {
 
         *keepAlivePacket = None;
 
-        // Grab a buffer for the keepalive packet
-        let mut kaPacket = channel.GetVpnSendPacketBuffer()?;
-        let dst = kaPacket.get_buf_mut()?;
+        // Allocate a temporary buffer on the stack for sending any data.
+        let mut dst = [0u8; 1500];
 
         // Any packets we need to send out?
-        match tunn.update_timers(dst) {
+        match tunn.update_timers(&mut dst) {
             // Nothing to do right now
             TunnResult::Done => {
                 // TODO: Return unused `kaPacket` buffer
@@ -569,12 +603,15 @@ impl VpnPlugin {
 
             // We got something to send to the remote
             TunnResult::WriteToNetwork(packet) => {
-                // Make sure to update length on WinRT buffer
-                let new_len = u32::try_from(packet.len()).map_err(|_| Error::from(E_BOUNDS))?;
-                drop(packet);
-                kaPacket.Buffer()?.SetLength(new_len)?;
+                // Grab a buffer for the keepalive packet
+                let mut kaPacket = channel.GetVpnSendPacketBuffer()?;
 
-                self.etw_logger.keepalive(None, new_len);
+                kaPacket
+                    .Buffer()?
+                    .SetLength(u32::try_from(packet.len()).map_err(|_| Error::from(E_BOUNDS))?)?;
+                kaPacket.get_buf_mut()?.copy_from_slice(packet);
+
+                self.etw_logger.keepalive(None, packet.len() as u32);
 
                 // Place the packet in the out param to send to remote
                 *keepAlivePacket = Some(kaPacket);
