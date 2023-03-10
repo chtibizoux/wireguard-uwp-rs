@@ -17,23 +17,23 @@ use windows::{
 #[implement(Windows::ApplicationModel::Background::IBackgroundTask)]
 pub struct VpnBackgroundTask;
 
-impl VpnBackgroundTask {
-    fn Run(&self, task: &Option<IBackgroundTaskInstance>) -> Result<()> {
+impl Windows::ApplicationModel::Background::IBackgroundTask_Impl for VpnBackgroundTask {
+    fn Run(&self, task: &Option<IBackgroundTaskInstance>) -> Windows::core::Result<()> {
         let task = task.as_ref().ok_or(Error::from(E_UNEXPECTED))?;
         let deferral = task.GetDeferral()?;
 
         // Grab existing plugin instance from in-memory app properties or create a new one
         let app_props = CoreApplication::Properties()?;
-        let plugin = if app_props.HasKey("plugin")? {
-            app_props.Lookup("plugin")?.cast()?
+        let plugin = if app_props.HasKey(&HSTRING::from("plugin"))? {
+            app_props.Lookup(&HSTRING::from("plugin"))?.cast()?
         } else {
             let plugin: IVpnPlugIn = super::plugin::VpnPlugin::new().into();
-            app_props.Insert("plugin", plugin.clone())?;
+            app_props.Insert(&HSTRING::from("plugin"), &plugin)?;
             plugin
         };
 
         // Call into VPN platform with the plugin object
-        VpnChannel::ProcessEventAsync(plugin, task.TriggerDetails()?)?;
+        VpnChannel::ProcessEventAsync(&plugin, &task.TriggerDetails()?)?;
 
         deferral.Complete()?;
 
@@ -48,7 +48,7 @@ impl VpnBackgroundTask {
 #[implement(Windows::Win32::System::WinRT::IActivationFactory)]
 struct VpnBackgroundTaskFactory;
 
-impl VpnBackgroundTaskFactory {
+impl Windows::Win32::System::WinRT::IActivationFactory_Impl for VpnBackgroundTaskFactory {
     /// Creates and returns a new instance of `VpnBackgroundTask`.
     fn ActivateInstance(&self) -> Result<IInspectable> {
         Ok(VpnBackgroundTask.into())

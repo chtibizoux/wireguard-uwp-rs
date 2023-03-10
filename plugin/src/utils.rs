@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use windows::{
     self as Windows,
-    core::*,
+    core::{implement, AsImpl, Error, InParam, Interface, Result, RuntimeType},
     Foundation::Collections::{IIterable, IIterator, IVector, IVectorView},
     Networking::Vpn::VpnPacketBuffer,
     Win32::Foundation::{E_BOUNDS, E_NOTIMPL},
@@ -20,28 +20,15 @@ use windows::{
 )]
 pub struct Vector<T: RuntimeType + 'static>(Vec<T::DefaultType>);
 
-impl<T: RuntimeType + 'static> Vector<T> {
-    pub fn new(v: Vec<T::DefaultType>) -> Vector<T> {
-        Vector(v)
-    }
-
-    fn First(&self) -> Result<IIterator<T>> {
-        Ok(VectorIterator::<T> {
-            it: self.cast()?,
-            curr: AtomicU32::new(0),
-        }
-        .into())
-    }
-
+impl<T: RuntimeType + 'static> Windows::Foundation::Collections::IVector_Impl<T> for Vector<T> {
     fn GetView(&self) -> Result<IVectorView<T>> {
-        Ok(self.cast()?)
+        Ok(unsafe { self.cast() }?)
     }
 
     fn GetAt(&self, index: u32) -> Result<T> {
         self.0
             .get(index as usize)
-            // SAFETY: `DefaultType` is a super trait of `RuntimeType`.
-            .map(|el| unsafe { DefaultType::from_default(el) })
+            .map(|el| T::from_default(el))
             .transpose()?
             .ok_or(Error::from(E_BOUNDS))
     }
@@ -103,15 +90,69 @@ impl<T: RuntimeType + 'static> Vector<T> {
     }
 }
 
-impl<'a, T: RuntimeType + 'static> IntoParam<'a, IVectorView<T>> for Vector<T> {
-    fn into_param(self) -> Param<'a, IVectorView<T>> {
-        Param::Owned(self.into())
+impl<T: RuntimeType + 'static> Windows::Foundation::Collections::IVectorView_Impl<T> for Vector<T> {
+    fn GetAt(&self, index: u32) -> Result<T> {
+        self.0
+            .get(index as usize)
+            .map(|el| T::from_default(el))
+            .transpose()?
+            .ok_or(Error::from(E_BOUNDS))
+    }
+
+    fn Size(&self) -> Result<u32> {
+        u32::try_from(self.0.len()).map_err(|_| Error::from(E_BOUNDS))
+    }
+
+    fn IndexOf(&self, value: &T::DefaultType, index: &mut u32) -> Result<bool> {
+        if let Some(idx) = self.0.iter().position(|el| el == value) {
+            *index = u32::try_from(idx).map_err(|_| Error::from(E_BOUNDS))?;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    fn GetMany(&self, start: u32, items: &mut [T::DefaultType]) -> Result<u32> {
+        let sz = u32::try_from(self.0.len()).map_err(|_| Error::from(E_BOUNDS))?;
+
+        if start >= sz {
+            return Err(Error::from(E_BOUNDS));
+        }
+
+        let mut count = 0;
+        for (item, el) in items.into_iter().zip(self.0[start as usize..].iter()) {
+            *item = el.clone();
+            count += 1;
+        }
+        Ok(count)
     }
 }
 
-impl<'a, T: RuntimeType + 'static> IntoParam<'a, IVector<T>> for Vector<T> {
-    fn into_param(self) -> Param<'a, IVector<T>> {
-        Param::Owned(self.into())
+impl<T: RuntimeType + 'static> Windows::Foundation::Collections::IIterable_Impl<T> for Vector<T> {
+    fn First(&self) -> Result<IIterator<T>> {
+        Ok(VectorIterator::<T> {
+            it: unsafe { self.cast() }?,
+            curr: AtomicU32::new(0),
+        }
+        .into())
+    }
+}
+
+impl<T: RuntimeType + 'static> Vector<T> {
+    pub fn new(v: Vec<T::DefaultType>) -> IVector<T> {
+        Vector(v).into()
+    }
+}
+
+impl<T: RuntimeType + 'static> Into<InParam<IVectorView<T>>> for Vector<T> {
+    fn into(self) -> InParam<IVectorView<T>> {
+        InParam::owned(self.into())
+    }
+}
+
+impl<T: RuntimeType + 'static> Into<InParam<IVector<T>>> for Vector<T> {
+    fn into(self) -> InParam<IVector<T>> {
+        InParam::owned(self.into())
     }
 }
 
@@ -124,29 +165,27 @@ struct VectorIterator<T: RuntimeType + 'static> {
     curr: AtomicU32,
 }
 
-impl<T: RuntimeType + 'static> VectorIterator<T> {
+impl<T: RuntimeType + 'static> Windows::Foundation::Collections::IIterator_Impl<T>
+    for VectorIterator<T>
+{
     fn Current(&self) -> Result<T> {
-        // SAFETY: We know this must be our `Vector` type
-        let vec = unsafe { Vector::to_impl(&self.it) };
+        let vec = self.it.cast::<IVector<T>>().expect("unexpected type");
         vec.GetAt(self.curr.load(Ordering::Relaxed))
     }
 
     fn HasCurrent(&self) -> Result<bool> {
-        // SAFETY: We know this must be our `Vector` type
-        let vec = unsafe { Vector::to_impl(&self.it) };
+        let vec = self.it.as_impl();
         Ok(vec.0.len() > self.curr.load(Ordering::Relaxed) as usize)
     }
 
     fn MoveNext(&self) -> Result<bool> {
-        // SAFETY: We know this must be our `Vector` type
-        let vec = unsafe { Vector::to_impl(&self.it) };
+        let vec = self.it.as_impl();
         let old = self.curr.fetch_add(1, Ordering::Relaxed) as usize;
         Ok(vec.0.len() > old + 1)
     }
 
     fn GetMany(&self, items: &mut [T::DefaultType]) -> Result<u32> {
-        // SAFETY: We know this must be our `Vector` type
-        let vec = unsafe { Vector::to_impl(&self.it) };
+        let vec = self.it.cast::<IVector<T>>().expect("unexpected type");
         vec.GetMany(0, items)
     }
 }
@@ -186,18 +225,18 @@ impl IBufferExt for VpnPacketBuffer {
 macro_rules! debug_log {
     ($fmt:tt) => {
         unsafe {
-            use windows::Win32::Foundation::PSTR;
-            use windows::Win32::System::Diagnostics::Debug::OutputDebugStringA;
+            use ::windows::core::PCSTR;
+            use ::windows::Win32::System::Diagnostics::Debug::OutputDebugStringA;
             let mut msg = format!(concat!($fmt, "\n\0"));
-            OutputDebugStringA(PSTR(msg.as_mut_ptr()));
+            OutputDebugStringA(PCSTR(msg.as_mut_ptr()));
         }
     };
     ($fmt:tt, $($arg:tt)*) => {
         unsafe {
-            use windows::Win32::Foundation::PSTR;
-            use windows::Win32::System::Diagnostics::Debug::OutputDebugStringA;
+            use ::windows::core::PCSTR;
+            use ::windows::Win32::System::Diagnostics::Debug::OutputDebugStringA;
             let mut msg = format!(concat!($fmt, "\n\0"), $($arg)*);
-            OutputDebugStringA(PSTR(msg.as_mut_ptr()));
+            OutputDebugStringA(PCSTR(msg.as_mut_ptr()));
         }
     };
 }
