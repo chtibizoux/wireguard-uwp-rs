@@ -4,12 +4,13 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use windows::{
     self as Windows,
-    core::{implement, AsImpl, Error, InParam, Interface, Result, RuntimeType},
+    core::{implement, AsImpl, Error, Param, Result, RuntimeType, Type},
     Foundation::Collections::{IIterable, IIterator, IVector, IVectorView},
     Networking::Vpn::VpnPacketBuffer,
     Win32::Foundation::{E_BOUNDS, E_NOTIMPL},
     Win32::System::WinRT::IBufferByteAccess,
 };
+use Windows::core::ComInterface;
 
 /// A simple wrapper around `Vec` which implements the `IVector`, `IVectorView` and
 /// `IIterable` interfaces.
@@ -18,9 +19,16 @@ use windows::{
     Windows::Foundation::Collections::IVector<T>,
     Windows::Foundation::Collections::IVectorView<T>
 )]
-pub struct Vector<T: RuntimeType + 'static>(Vec<T::DefaultType>);
+pub struct Vector<T>(Vec<T::Default>)
+where
+    T: RuntimeType + 'static,
+    <T as Type<T>>::Default: PartialEq + Clone;
 
-impl<T: RuntimeType + 'static> Windows::Foundation::Collections::IVector_Impl<T> for Vector<T> {
+impl<T> Windows::Foundation::Collections::IVector_Impl<T> for Vector<T>
+where
+    T: RuntimeType + 'static,
+    <T as Type<T>>::Default: PartialEq + Clone,
+{
     fn GetView(&self) -> Result<IVectorView<T>> {
         Ok(unsafe { self.cast() }?)
     }
@@ -37,7 +45,7 @@ impl<T: RuntimeType + 'static> Windows::Foundation::Collections::IVector_Impl<T>
         u32::try_from(self.0.len()).map_err(|_| Error::from(E_BOUNDS))
     }
 
-    fn IndexOf(&self, value: &T::DefaultType, index: &mut u32) -> Result<bool> {
+    fn IndexOf(&self, value: &T::Default, index: &mut u32) -> Result<bool> {
         if let Some(idx) = self.0.iter().position(|el| el == value) {
             *index = u32::try_from(idx).map_err(|_| Error::from(E_BOUNDS))?;
             Ok(true)
@@ -46,7 +54,7 @@ impl<T: RuntimeType + 'static> Windows::Foundation::Collections::IVector_Impl<T>
         }
     }
 
-    fn GetMany(&self, start: u32, items: &mut [T::DefaultType]) -> Result<u32> {
+    fn GetMany(&self, start: u32, items: &mut [T::Default]) -> Result<u32> {
         let sz = u32::try_from(self.0.len()).map_err(|_| Error::from(E_BOUNDS))?;
 
         if start >= sz {
@@ -61,11 +69,11 @@ impl<T: RuntimeType + 'static> Windows::Foundation::Collections::IVector_Impl<T>
         Ok(count)
     }
 
-    fn SetAt(&self, _index: u32, _value: &T::DefaultType) -> Result<()> {
+    fn SetAt(&self, _index: u32, _value: &T::Default) -> Result<()> {
         Err(E_NOTIMPL.into())
     }
 
-    fn InsertAt(&self, _index: u32, _value: &T::DefaultType) -> Result<()> {
+    fn InsertAt(&self, _index: u32, _value: &T::Default) -> Result<()> {
         Err(E_NOTIMPL.into())
     }
 
@@ -73,7 +81,7 @@ impl<T: RuntimeType + 'static> Windows::Foundation::Collections::IVector_Impl<T>
         Err(E_NOTIMPL.into())
     }
 
-    fn Append(&self, _value: &T::DefaultType) -> Result<()> {
+    fn Append(&self, _value: &T::Default) -> Result<()> {
         Err(E_NOTIMPL.into())
     }
 
@@ -85,12 +93,16 @@ impl<T: RuntimeType + 'static> Windows::Foundation::Collections::IVector_Impl<T>
         Err(E_NOTIMPL.into())
     }
 
-    fn ReplaceAll(&self, _values: &[T::DefaultType]) -> Result<()> {
+    fn ReplaceAll(&self, _values: &[T::Default]) -> Result<()> {
         Err(E_NOTIMPL.into())
     }
 }
 
-impl<T: RuntimeType + 'static> Windows::Foundation::Collections::IVectorView_Impl<T> for Vector<T> {
+impl<T> Windows::Foundation::Collections::IVectorView_Impl<T> for Vector<T>
+where
+    T: RuntimeType + 'static,
+    <T as Type<T>>::Default: PartialEq + Clone,
+{
     fn GetAt(&self, index: u32) -> Result<T> {
         self.0
             .get(index as usize)
@@ -103,7 +115,7 @@ impl<T: RuntimeType + 'static> Windows::Foundation::Collections::IVectorView_Imp
         u32::try_from(self.0.len()).map_err(|_| Error::from(E_BOUNDS))
     }
 
-    fn IndexOf(&self, value: &T::DefaultType, index: &mut u32) -> Result<bool> {
+    fn IndexOf(&self, value: &T::Default, index: &mut u32) -> Result<bool> {
         if let Some(idx) = self.0.iter().position(|el| el == value) {
             *index = u32::try_from(idx).map_err(|_| Error::from(E_BOUNDS))?;
             Ok(true)
@@ -112,7 +124,7 @@ impl<T: RuntimeType + 'static> Windows::Foundation::Collections::IVectorView_Imp
         }
     }
 
-    fn GetMany(&self, start: u32, items: &mut [T::DefaultType]) -> Result<u32> {
+    fn GetMany(&self, start: u32, items: &mut [T::Default]) -> Result<u32> {
         let sz = u32::try_from(self.0.len()).map_err(|_| Error::from(E_BOUNDS))?;
 
         if start >= sz {
@@ -128,7 +140,11 @@ impl<T: RuntimeType + 'static> Windows::Foundation::Collections::IVectorView_Imp
     }
 }
 
-impl<T: RuntimeType + 'static> Windows::Foundation::Collections::IIterable_Impl<T> for Vector<T> {
+impl<T> Windows::Foundation::Collections::IIterable_Impl<T> for Vector<T>
+where
+    T: RuntimeType + 'static,
+    <T as Type<T>>::Default: PartialEq + Clone,
+{
     fn First(&self) -> Result<IIterator<T>> {
         Ok(VectorIterator::<T> {
             it: unsafe { self.cast() }?,
@@ -138,35 +154,53 @@ impl<T: RuntimeType + 'static> Windows::Foundation::Collections::IIterable_Impl<
     }
 }
 
-impl<T: RuntimeType + 'static> Vector<T> {
-    pub fn new(v: Vec<T::DefaultType>) -> IVector<T> {
+impl<T> Vector<T>
+where
+    T: RuntimeType + 'static,
+    <T as Type<T>>::Default: PartialEq + Clone,
+{
+    pub fn new(v: Vec<T::Default>) -> IVector<T> {
         Vector(v).into()
     }
 }
 
-impl<T: RuntimeType + 'static> Into<InParam<IVectorView<T>>> for Vector<T> {
-    fn into(self) -> InParam<IVectorView<T>> {
-        InParam::owned(self.into())
+impl<T> Into<Param<IVectorView<T>>> for Vector<T>
+where
+    T: RuntimeType + 'static,
+    <T as Type<T>>::Default: PartialEq + Clone,
+{
+    fn into(self) -> Param<IVectorView<T>> {
+        Param::Owned(self.into())
     }
 }
 
-impl<T: RuntimeType + 'static> Into<InParam<IVector<T>>> for Vector<T> {
-    fn into(self) -> InParam<IVector<T>> {
-        InParam::owned(self.into())
+impl<T> Into<Param<IVector<T>>> for Vector<T>
+where
+    T: RuntimeType + 'static,
+    <T as Type<T>>::Default: PartialEq + Clone,
+{
+    fn into(self) -> Param<IVector<T>> {
+        Param::Owned(self.into())
     }
 }
 
 /// `IIterator` wrapper for `Vector`
 #[implement(Windows::Foundation::Collections::IIterator<T>)]
-struct VectorIterator<T: RuntimeType + 'static> {
+struct VectorIterator<T>
+where
+    T: RuntimeType + 'static,
+    <T as Type<T>>::Default: PartialEq + Clone,
+{
     /// The underlying object we're iteratoring over
     it: IIterable<T>,
     /// The current position of the iterator
     curr: AtomicU32,
 }
 
-impl<T: RuntimeType + 'static> Windows::Foundation::Collections::IIterator_Impl<T>
-    for VectorIterator<T>
+impl<T> Windows::Foundation::Collections::IIterator_Impl<T> for VectorIterator<T>
+where
+    T: RuntimeType + 'static,
+    <T as Type<T>>::Default: PartialEq + Clone,
 {
     fn Current(&self) -> Result<T> {
         let vec = self.it.cast::<IVector<T>>().expect("unexpected type");
@@ -174,17 +208,17 @@ impl<T: RuntimeType + 'static> Windows::Foundation::Collections::IIterator_Impl<
     }
 
     fn HasCurrent(&self) -> Result<bool> {
-        let vec = self.it.as_impl();
+        let vec: &Vector<T> = unsafe { self.it.as_impl() };
         Ok(vec.0.len() > self.curr.load(Ordering::Relaxed) as usize)
     }
 
     fn MoveNext(&self) -> Result<bool> {
-        let vec = self.it.as_impl();
+        let vec: &Vector<T> = unsafe { self.it.as_impl() };
         let old = self.curr.fetch_add(1, Ordering::Relaxed) as usize;
         Ok(vec.0.len() > old + 1)
     }
 
-    fn GetMany(&self, items: &mut [T::DefaultType]) -> Result<u32> {
+    fn GetMany(&self, items: &mut [T::Default]) -> Result<u32> {
         let vec = self.it.cast::<IVector<T>>().expect("unexpected type");
         vec.GetMany(0, items)
     }

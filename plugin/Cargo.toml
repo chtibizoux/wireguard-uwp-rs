@@ -11,7 +11,7 @@ crate-type = ["cdylib"]
 [dependencies]
 anyhow = "1.0.66"
 base64 = "0.13"
-boringtun = "0.5.2"
+boringtun = "0.6"
 ipnetwork = "0.18"
 quick-xml = { version = "0.22", features = ["serialize"] }
 rand = "0.8.5"
@@ -19,10 +19,10 @@ serde = { version = "1.0", features = ["derive"] }
 serde_with = "1.11"
 win_etw_macros = "0.1"
 win_etw_provider = "0.1"
-x25519-dalek = "2.0.0-pre.1"
+x25519-dalek = "2.0.0-rc.3"
 
 [dependencies.windows]
-version = "0.44.0"
+version = "0.52.0"
 features = [
     "implement",
     "ApplicationModel_Background",

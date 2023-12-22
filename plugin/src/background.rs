@@ -18,7 +18,7 @@ use windows::{
 pub struct VpnBackgroundTask;
 
 impl Windows::ApplicationModel::Background::IBackgroundTask_Impl for VpnBackgroundTask {
-    fn Run(&self, task: &Option<IBackgroundTaskInstance>) -> Windows::core::Result<()> {
+    fn Run(&self, task: Option<&IBackgroundTaskInstance>) -> Windows::core::Result<()> {
         let task = task.as_ref().ok_or(Error::from(E_UNEXPECTED))?;
         let deferral = task.GetDeferral()?;
 

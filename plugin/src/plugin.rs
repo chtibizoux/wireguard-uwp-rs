@@ -19,96 +19,96 @@ use crate::config::WireGuardConfig;
 use crate::logging::WireGuardUWPEvents;
 use crate::utils::{debug_log, IBufferExt, Vector};
 
-trait VpnChannelOverride {
-    fn StartO<P0, E0, P1, E1, P2, P3>(
-        &self,
-        assignedclientipv4list: P0,
-        assignedclientipv6list: P1,
-        vpninterfaceid: &Option<VpnInterfaceId>,
-        routescope: &VpnRouteAssignment,
-        namespacescope: &VpnNamespaceAssignment,
-        mtusize: u32,
-        maxframesize: u32,
-        optimizeforlowcostnetwork: bool,
-        mainoutertunneltransport: P2,
-        optionaloutertunneltransport: P3,
-    ) -> ::windows::core::Result<()>
-    where
-        P0: ::std::convert::TryInto<
-            ::windows::core::InParam<
-                ::core::option::Option<::windows::Foundation::Collections::IVectorView<HostName>>,
-            >,
-            Error = E0,
-        >,
-        E0: ::std::convert::Into<::windows::core::Error>,
-        P1: ::std::convert::TryInto<
-            ::windows::core::InParam<
-                ::core::option::Option<::windows::Foundation::Collections::IVectorView<HostName>>,
-            >,
-            Error = E1,
-        >,
-        E1: ::std::convert::Into<::windows::core::Error>,
-        P2: ::std::convert::Into<::windows::core::InParam<::windows::core::IInspectable>>,
-        P3: ::std::convert::Into<::windows::core::InParam<::windows::core::IInspectable>>;
-}
+// trait VpnChannelOverride {
+//     fn StartO<P0, E0, P1, E1, P2, P3>(
+//         &self,
+//         assignedclientipv4list: P0,
+//         assignedclientipv6list: P1,
+//         vpninterfaceid: Option<&VpnInterfaceId>,
+//         routescope: &VpnRouteAssignment,
+//         namespacescope: &VpnNamespaceAssignment,
+//         mtusize: u32,
+//         maxframesize: u32,
+//         optimizeforlowcostnetwork: bool,
+//         mainoutertunneltransport: P2,
+//         optionaloutertunneltransport: P3,
+//     ) -> ::windows::core::Result<()>
+//     where
+//         P0: ::std::convert::TryInto<
+//             ::windows::core::Param<
+//                 ::core::option::Option<::windows::Foundation::Collections::IVectorView<HostName>>,
+//             >,
+//             Error = E0,
+//         >,
+//         E0: ::std::convert::Into<::windows::core::Error>,
+//         P1: ::std::convert::TryInto<
+//             ::windows::core::Param<
+//                 ::core::option::Option<::windows::Foundation::Collections::IVectorView<HostName>>,
+//             >,
+//             Error = E1,
+//         >,
+//         E1: ::std::convert::Into<::windows::core::Error>,
+//         P2: ::std::convert::Into<::windows::core::Param<::windows::core::IInspectable>>,
+//         P3: ::std::convert::Into<::windows::core::Param<::windows::core::IInspectable>>;
+// }
 
-impl VpnChannelOverride for VpnChannel {
-    fn StartO<P0, E0, P1, E1, P2, P3>(
-        &self,
-        assignedclientipv4list: P0,
-        assignedclientipv6list: P1,
-        vpninterfaceid: &Option<VpnInterfaceId>,
-        routescope: &VpnRouteAssignment,
-        namespacescope: &VpnNamespaceAssignment,
-        mtusize: u32,
-        maxframesize: u32,
-        optimizeforlowcostnetwork: bool,
-        mainoutertunneltransport: P2,
-        optionaloutertunneltransport: P3,
-    ) -> ::windows::core::Result<()>
-    where
-        P0: ::std::convert::TryInto<
-            ::windows::core::InParam<
-                ::core::option::Option<::windows::Foundation::Collections::IVectorView<HostName>>,
-            >,
-            Error = E0,
-        >,
-        E0: ::std::convert::Into<::windows::core::Error>,
-        P1: ::std::convert::TryInto<
-            ::windows::core::InParam<
-                ::core::option::Option<::windows::Foundation::Collections::IVectorView<HostName>>,
-            >,
-            Error = E1,
-        >,
-        E1: ::std::convert::Into<::windows::core::Error>,
-        P2: ::std::convert::Into<::windows::core::InParam<::windows::core::IInspectable>>,
-        P3: ::std::convert::Into<::windows::core::InParam<::windows::core::IInspectable>>,
-    {
-        let this = self;
-        unsafe {
-            (::windows::core::Vtable::vtable(this).Start)(
-                ::windows::core::Vtable::as_raw(this),
-                assignedclientipv4list
-                    .try_into()
-                    .map_err(|e| e.into())?
-                    .abi(),
-                assignedclientipv6list
-                    .try_into()
-                    .map_err(|e| e.into())?
-                    .abi(),
-                ::core::mem::transmute_copy(vpninterfaceid),
-                ::core::mem::transmute_copy(routescope),
-                ::core::mem::transmute_copy(namespacescope),
-                mtusize,
-                maxframesize,
-                optimizeforlowcostnetwork,
-                mainoutertunneltransport.into().abi(),
-                optionaloutertunneltransport.into().abi(),
-            )
-            .ok()
-        }
-    }
-}
+// impl VpnChannelOverride for VpnChannel {
+//     fn StartO<P0, E0, P1, E1, P2, P3>(
+//         &self,
+//         assignedclientipv4list: P0,
+//         assignedclientipv6list: P1,
+//         vpninterfaceid: Option<&VpnInterfaceId>,
+//         routescope: &VpnRouteAssignment,
+//         namespacescope: &VpnNamespaceAssignment,
+//         mtusize: u32,
+//         maxframesize: u32,
+//         optimizeforlowcostnetwork: bool,
+//         mainoutertunneltransport: P2,
+//         optionaloutertunneltransport: P3,
+//     ) -> ::windows::core::Result<()>
+//     where
+//         P0: ::std::convert::TryInto<
+//             ::windows::core::Param<
+//                 ::core::option::Option<::windows::Foundation::Collections::IVectorView<HostName>>,
+//             >,
+//             Error = E0,
+//         >,
+//         E0: ::std::convert::Into<::windows::core::Error>,
+//         P1: ::std::convert::TryInto<
+//             ::windows::core::Param<
+//                 ::core::option::Option<::windows::Foundation::Collections::IVectorView<HostName>>,
+//             >,
+//             Error = E1,
+//         >,
+//         E1: ::std::convert::Into<::windows::core::Error>,
+//         P2: ::std::convert::Into<::windows::core::Param<::windows::core::IInspectable>>,
+//         P3: ::std::convert::Into<::windows::core::Param<::windows::core::IInspectable>>,
+//     {
+//         let this = self;
+//         unsafe {
+//             (::windows::core::Interface::vtable(this).Start)(
+//                 ::windows::core::Interface::as_raw(this),
+//                 assignedclientipv4list
+//                     .try_into()
+//                     .map_err(|e| e.into())?
+//                     .abi(),
+//                 assignedclientipv6list
+//                     .try_into()
+//                     .map_err(|e| e.into())?
+//                     .abi(),
+//                 ::core::mem::transmute_copy(&vpninterfaceid),
+//                 ::core::mem::transmute_copy(routescope),
+//                 ::core::mem::transmute_copy(namespacescope),
+//                 mtusize,
+//                 maxframesize,
+//                 optimizeforlowcostnetwork,
+//                 mainoutertunneltransport.into().abi(),
+//                 optionaloutertunneltransport.into().abi(),
+//             )
+//             .ok()
+//         }
+//     }
+// }
 
 struct Inner {
     tunn: Option<Box<Tunn>>,
@@ -129,7 +129,7 @@ pub struct VpnPlugin {
 
 impl Windows::Networking::Vpn::IVpnPlugIn_Impl for VpnPlugin {
     /// Called by the platform so that we may connect and setup the VPN tunnel.
-    fn Connect(&self, channel: &Option<VpnChannel>) -> Result<()> {
+    fn Connect(&self, channel: Option<&VpnChannel>) -> Result<()> {
         // Call out to separate method so that we can capture any errors
         if let Err(err) = self.connect_inner(channel) {
             self.etw_logger
@@ -141,7 +141,7 @@ impl Windows::Networking::Vpn::IVpnPlugIn_Impl for VpnPlugin {
     }
 
     /// Called by the platform to indicate we should disconnect and cleanup the VPN tunnel.
-    fn Disconnect(&self, channel: &Option<VpnChannel>) -> Result<()> {
+    fn Disconnect(&self, channel: Option<&VpnChannel>) -> Result<()> {
         // Call out to separate method so that we can capture any errors
         if let Err(err) = self.disconnect_inner(channel) {
             self.etw_logger
@@ -160,9 +160,9 @@ impl Windows::Networking::Vpn::IVpnPlugIn_Impl for VpnPlugin {
     /// the remote endpoint.
     fn Encapsulate(
         &self,
-        channel: &Option<VpnChannel>,
-        packets: &Option<VpnPacketBufferList>,
-        encapsulatedPackets: &Option<VpnPacketBufferList>,
+        channel: Option<&VpnChannel>,
+        packets: Option<&VpnPacketBufferList>,
+        encapsulatedPackets: Option<&VpnPacketBufferList>,
     ) -> Result<()> {
         // Call out to separate method so that we can capture any errors
         match self.encapsulate_inner(channel, packets, encapsulatedPackets) {
@@ -185,10 +185,10 @@ impl Windows::Networking::Vpn::IVpnPlugIn_Impl for VpnPlugin {
     /// may place such frames into `controlPackets`.
     fn Decapsulate(
         &self,
-        channel: &Option<VpnChannel>,
-        buffer: &Option<VpnPacketBuffer>,
-        decapsulatedPackets: &Option<VpnPacketBufferList>,
-        controlPackets: &Option<VpnPacketBufferList>,
+        channel: Option<&VpnChannel>,
+        buffer: Option<&VpnPacketBuffer>,
+        decapsulatedPackets: Option<&VpnPacketBufferList>,
+        controlPackets: Option<&VpnPacketBufferList>,
     ) -> Result<()> {
         // Call out to separate method so that we can capture any errors
         match self.decapsulate_inner(channel, buffer, decapsulatedPackets, controlPackets) {
@@ -206,14 +206,14 @@ impl Windows::Networking::Vpn::IVpnPlugIn_Impl for VpnPlugin {
     /// If we decide we want to send any keepalive payload, we place it in `keepAlivePacket`.
     fn GetKeepAlivePayload(
         &self,
-        channel: &Option<VpnChannel>,
+        channel: Option<&VpnChannel>,
         keepAlivePacket: &mut Option<VpnPacketBuffer>,
     ) -> Result<()> {
         let channel = channel.as_ref().ok_or(Error::from(E_UNEXPECTED))?;
 
-        let inner = self.inner.lock().unwrap();
-        let tunn = if let Some(tunn) = &inner.tunn {
-            &**tunn
+        let mut inner = self.inner.lock().unwrap();
+        let tunn = if let Some(tunn) = &mut inner.tunn {
+            &mut **tunn
         } else {
             // We haven't initalized tunn yet, just return
             return Ok(());
@@ -276,7 +276,7 @@ impl VpnPlugin {
     }
 
     /// Internal `Connect` implementation.
-    fn connect_inner(&self, channel: &Option<VpnChannel>) -> Result<()> {
+    fn connect_inner(&self, channel: Option<&VpnChannel>) -> Result<()> {
         let channel = channel.as_ref().ok_or(Error::from(E_UNEXPECTED))?;
         let mut inner = self.inner.lock().unwrap();
 
@@ -316,7 +316,7 @@ impl VpnPlugin {
         let ipv4_addrs = if ipv4_addrs.is_empty() {
             None
         } else {
-            Some(Vector::<HostName>::new(ipv4_addrs).cast().unwrap())
+            Some(Vector::<HostName>::new(ipv4_addrs).GetView().unwrap())
         };
         let ipv6_addrs = ipv6
             .into_iter()
@@ -328,7 +328,7 @@ impl VpnPlugin {
         let ipv6_addrs = if ipv6_addrs.is_empty() {
             None
         } else {
-            Some(Vector::<HostName>::new(ipv6_addrs).cast().unwrap())
+            Some(Vector::<HostName>::new(ipv6_addrs).GetView().unwrap())
         };
 
         let build_routes = |routes: Vec<IpNetwork>| -> Result<_> {
@@ -428,7 +428,7 @@ impl VpnPlugin {
 
         // Stuff it into our inner state
         // Just forget the previous tunn state and start over (if one exists at all)
-        if let Some(_) = std::mem::replace(&mut inner.tunn, Some(tunn)) {
+        if let Some(_) = std::mem::replace(&mut inner.tunn, Some(Box::new(tunn))) {
             debug_log!("Replacing leftover tunn state.");
         }
 
@@ -448,10 +448,10 @@ impl VpnPlugin {
             .get()?;
 
         // Kick off the VPN setup
-        channel.StartO(
-            &ipv4_addrs,
-            &ipv6_addrs,
-            &None, // Interface ID portion of IPv6 address for VPN tunnel
+        channel.Start(
+            ipv4_addrs.as_ref(),
+            ipv6_addrs.as_ref(),
+            None, // Interface ID portion of IPv6 address for VPN tunnel
             &routes,
             &namespace_assignment,
             1500,  // MTU size of VPN tunnel interface
@@ -469,7 +469,7 @@ impl VpnPlugin {
     }
 
     /// Internal `Disconnect` implementation.
-    fn disconnect_inner(&self, channel: &Option<VpnChannel>) -> Result<()> {
+    fn disconnect_inner(&self, channel: Option<&VpnChannel>) -> Result<()> {
         let channel = channel.as_ref().ok_or(Error::from(E_UNEXPECTED))?;
 
         let mut inner = self.inner.lock().unwrap();
@@ -482,9 +482,9 @@ impl VpnPlugin {
 
     fn encapsulate_inner(
         &self,
-        channel: &Option<VpnChannel>,
-        packets: &Option<VpnPacketBufferList>,
-        encapsulatedPackets: &Option<VpnPacketBufferList>,
+        channel: Option<&VpnChannel>,
+        packets: Option<&VpnPacketBufferList>,
+        encapsulatedPackets: Option<&VpnPacketBufferList>,
     ) -> Result<()> {
         let channel = channel.as_ref().ok_or(Error::from(E_UNEXPECTED))?;
         let packets = packets.as_ref().ok_or(Error::from(E_UNEXPECTED))?;
@@ -492,9 +492,9 @@ impl VpnPlugin {
             .as_ref()
             .ok_or(Error::from(E_UNEXPECTED))?;
 
-        let inner = self.inner.lock().unwrap();
-        let tunn = if let Some(tunn) = &inner.tunn {
-            &**tunn
+        let mut inner = self.inner.lock().unwrap();
+        let tunn = if let Some(tunn) = &mut inner.tunn {
+            &mut **tunn
         } else {
             // We haven't initalized tunn yet, just return
             return Ok(());
@@ -571,7 +571,7 @@ impl VpnPlugin {
             if let TunnResult::WriteToNetwork(packet) = res {
                 // Packet was encap'd successfully, make sure to update length on the WinRT side
                 let new_len = u32::try_from(packet.len()).map_err(|_| Error::from(E_BOUNDS))?;
-                drop(packet);
+                // drop(packet);
                 encapPacket.Buffer()?.SetLength(new_len)?;
 
                 // Now, tack it onto `encapsulatedPackets` to send to remote endpoint
@@ -630,10 +630,10 @@ impl VpnPlugin {
 
     fn decapsulate_inner(
         &self,
-        channel: &Option<VpnChannel>,
-        buffer: &Option<VpnPacketBuffer>,
-        decapsulatedPackets: &Option<VpnPacketBufferList>,
-        controlPackets: &Option<VpnPacketBufferList>,
+        channel: Option<&VpnChannel>,
+        buffer: Option<&VpnPacketBuffer>,
+        decapsulatedPackets: Option<&VpnPacketBufferList>,
+        controlPackets: Option<&VpnPacketBufferList>,
     ) -> Result<()> {
         let channel = channel.as_ref().ok_or(Error::from(E_UNEXPECTED))?;
         let buffer = buffer.as_ref().ok_or(Error::from(E_UNEXPECTED))?;
@@ -642,9 +642,9 @@ impl VpnPlugin {
             .ok_or(Error::from(E_UNEXPECTED))?;
         let controlPackets = controlPackets.as_ref().ok_or(Error::from(E_UNEXPECTED))?;
 
-        let inner = self.inner.lock().unwrap();
-        let tunn = if let Some(tunn) = &inner.tunn {
-            &**tunn
+        let mut inner = self.inner.lock().unwrap();
+        let tunn = if let Some(tunn) = &mut inner.tunn {
+            &mut **tunn
         } else {
             // We haven't initalized tunn yet, just return
             return Ok(());
