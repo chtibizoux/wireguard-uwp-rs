@@ -422,9 +422,7 @@ impl VpnPlugin {
             persistent_keepalive,
             rand::random(), // Our sender index. Needs to be a pseudorandom number.
             None,           // TODO: No rate limiter
-        )
-        // TODO: is E_UNEXPECTED the right error here?
-        .map_err(|e| Error::new(E_UNEXPECTED, e.into()))?;
+        );
 
         // Stuff it into our inner state
         // Just forget the previous tunn state and start over (if one exists at all)
