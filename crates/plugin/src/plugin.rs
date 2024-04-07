@@ -237,7 +237,7 @@ impl Windows::Networking::Vpn::IVpnPlugIn_Impl for VpnPlugin {
                 return Err(Error::new(
                     // TODO: Better error than `E_UNEXPECTED`?
                     E_UNEXPECTED,
-                    format!("update_timers error: {:?}", err).into(),
+                    format!("update_timers error: {:?}", err),
                 ));
             }
 
@@ -518,7 +518,7 @@ impl VpnPlugin {
                 TunnResult::Err(err) => {
                     return Err(Error::new(
                         E_UNEXPECTED,
-                        format!("update_timers error: {:?}", err).into(),
+                        format!("update_timers error: {:?}", err),
                     ));
                 }
 
@@ -585,10 +585,8 @@ impl VpnPlugin {
                     // Encountered an error while trying to encapsulate
                     TunnResult::Err(err) => {
                         if encap_err.is_none() {
-                            encap_err = Some(Error::new(
-                                E_UNEXPECTED,
-                                format!("encap error: {:?}", err).into(),
-                            ));
+                            encap_err =
+                                Some(Error::new(E_UNEXPECTED, format!("encap error: {:?}", err)));
                         }
                     }
 
@@ -671,10 +669,7 @@ impl VpnPlugin {
             // Encountered an error while trying to decapsulate
             TunnResult::Err(err) => {
                 // TODO: Return unused `decapPacket` buffer
-                return Err(Error::new(
-                    E_UNEXPECTED,
-                    format!("decap error: {:?}", err).into(),
-                ));
+                return Err(Error::new(E_UNEXPECTED, format!("decap error: {:?}", err)));
             }
 
             // We need to send at least one response back to remote endpoint

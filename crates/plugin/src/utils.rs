@@ -10,7 +10,7 @@ use windows::{
     Win32::Foundation::{E_BOUNDS, E_NOTIMPL},
     Win32::System::WinRT::IBufferByteAccess,
 };
-use Windows::core::ComInterface;
+use Windows::core::Interface;
 
 /// A simple wrapper around `Vec` which implements the `IVector`, `IVectorView` and
 /// `IIterable` interfaces.
