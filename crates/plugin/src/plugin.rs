@@ -1,4 +1,4 @@
-//! Our implementation of `IVpnPlugIn` which is the bulk of the UWP VPN plugin.
+//! Our implementation of `IVpnPlugIn` which is the bulk of the VPN plugin.
 
 use std::sync::Mutex;
 use std::time::Duration;
@@ -15,7 +15,7 @@ use windows::{
 };
 
 use crate::config::WireGuardConfig;
-use crate::logging::WireGuardUWPEvents;
+use crate::logging::WireGuardEvents;
 use crate::utils::{debug_log, IBufferExt, Vector};
 
 struct Inner {
@@ -32,7 +32,7 @@ impl Inner {
 #[implement(IVpnPlugIn)]
 pub struct VpnPlugin {
     inner: Mutex<Inner>,
-    etw_logger: WireGuardUWPEvents,
+    etw_logger: WireGuardEvents,
 }
 
 impl IVpnPlugIn_Impl for VpnPlugin_Impl {
@@ -180,7 +180,7 @@ impl VpnPlugin {
     pub fn new() -> Self {
         Self {
             inner: Mutex::new(Inner::new()),
-            etw_logger: WireGuardUWPEvents::new(),
+            etw_logger: WireGuardEvents::new(),
         }
     }
 

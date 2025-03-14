@@ -83,7 +83,7 @@ pub unsafe extern "system" fn DllGetActivationFactory(
     }
 
     // Return the appropriate factory based on which class was requested
-    if *activatable_class_id == "WireGuard-UWP.VpnBackgroundTask" {
+    if *activatable_class_id == "WireGuard.VpnBackgroundTask" {
         *factory = Some(VpnBackgroundTaskFactory.into());
     } else {
         *factory = None;

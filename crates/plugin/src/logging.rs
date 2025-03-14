@@ -5,7 +5,7 @@ use win_etw_macros::trace_logging_provider;
 /// The collection of ETW events our plugin emits.
 #[allow(non_snake_case)]
 #[trace_logging_provider(guid = "c4522a55-401f-4b81-93f9-aa0d1db734c4")]
-pub trait WireGuardUWPEvents {
+pub trait WireGuardEvents {
     /// `Connect` event emitted once we've successfully connected
     #[event(level = "info")]
     fn connected(remote_host: &str, remote_port: u16);

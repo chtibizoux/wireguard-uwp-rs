@@ -43,7 +43,7 @@ To get your VPN tunnel up and running:
 1. Open Windows Settings and navigate to the VPN page:
 `Network & Internet > VPN`.
 2. Select `Add a VPN connection`.
-3. From the `VPN provider` dropdown select **WireGuard UWP VPN**.
+3. From the `VPN provider` dropdown select **WireGuard VPN**.
 4. Give your new VPN profile a name under `Connection name`.
 5. Enter the remote endpoint hostname or IP address under `Server name or address`.
 6. Hit `Save`.
